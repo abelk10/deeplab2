@@ -139,6 +139,7 @@ import collections
 
 from deeplab2.data import ade20k_constants
 from deeplab2.data import waymo_constants
+from deeplab2.data import graph_constants
 
 # Dataset names.
 _CITYSCAPES_PANOPTIC = 'cityscapes_panoptic'
@@ -148,6 +149,7 @@ _CITYSCAPES_DVPS = 'cityscapes_dvps'
 _SEMKITTI_DVPS = 'semkitti_dvps'
 _COCO_PANOPTIC = 'coco_panoptic'
 _ADE20K_PANOPTIC = 'ade20k_panoptic'
+_GRAPH_PANOPTIC_INFORMATION = 'graph_panoptic'
 
 # WOD: PVPS dataset names.
 _WOD_PVPS_IMAGE_PANOPTIC_SEG = 'wod_pvps_image_panoptic_seg'
@@ -163,6 +165,7 @@ MOTCHALLENGE_COLORMAP = 'motchallenge'
 COCO_COLORMAP = 'coco'
 _ADE20K_COLORMAP = 'ade20k'
 WOD_PVPS_COLORMAP = waymo_constants.COLORMAP
+_GRAPH_COLORMAP = 'graph'
 
 # Camera Names for WOD: PVPS.
 WOD_PVPS_CAMERA_NAMES = [
@@ -325,6 +328,25 @@ ADE20K_PANOPTIC_INFORMATION = _build_dataset_info(
     ignore_depth=None,
 )
 
+GRAPH_PANOPTIC_INFORMATION = _build_dataset_info(
+    dataset_name=_GRAPH_PANOPTIC_INFORMATION,
+    splits_to_sizes={
+        'train': 5000,
+        'val': 500,
+    },
+    num_classes=3,
+    ignore_label=255,
+    panoptic_label_divisor=1000,
+    class_has_instances_list=(
+        # empty because we don't have instance_ids for now
+        # graph_constants.get_graph_class_has_instances_list() #nodes and edges are the things, background pixels are
+    ), 
+    is_video_dataset=False,
+    colormap=_GRAPH_COLORMAP,
+    is_depth_dataset=False,
+    ignore_depth=None,
+)
+
 MAP_NAME_TO_DATASET_INFO = {
     _CITYSCAPES_PANOPTIC: CITYSCAPES_PANOPTIC_INFORMATION,
     _KITTI_STEP: KITTI_STEP_INFORMATION,
@@ -333,6 +355,7 @@ MAP_NAME_TO_DATASET_INFO = {
     _COCO_PANOPTIC: COCO_PANOPTIC_INFORMATION,
     _ADE20K_PANOPTIC: ADE20K_PANOPTIC_INFORMATION,
     _SEMKITTI_DVPS: SEMKITTI_DVPS_INFORMATION,
+    _GRAPH_PANOPTIC_INFORMATION: GRAPH_PANOPTIC_INFORMATION
 }
 
 MAP_NAMES = list(MAP_NAME_TO_DATASET_INFO.keys())

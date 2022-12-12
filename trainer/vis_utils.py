@@ -23,6 +23,7 @@ import tensorflow as tf
 from deeplab2.data import ade20k_constants
 from deeplab2.data import coco_constants
 from deeplab2.data import waymo_constants
+from deeplab2.data import graph_constants
 
 # Amount of color perturbation added to colormap.
 _COLOR_PERTURBATION = 60
@@ -416,6 +417,18 @@ def create_waymo_label_colormap():
     colormap[category['id']] = category['color']
   return colormap
 
+def create_graph_label_colormap():
+  """Creates a label colormap used in Graph segmentation dataset.
+
+  Returns:
+    A colormap for visualizing segmentation results.
+  """
+  graph_categories = graph_constants.get_graph_meta()
+  colormap = np.zeros((256, 3), dtype=np.uint8)
+  for category in graph_categories:
+    colormap[category['id']] = category['color']
+  return colormap
+
 
 def label_to_color_image(label, colormap_name='cityscapes'):
   """Adds color defined by the colormap derived from the dataset to the label.
@@ -452,6 +465,8 @@ def label_to_color_image(label, colormap_name='cityscapes'):
     colormap = create_ade20k_label_colormap()
   elif colormap_name == 'waymo':
     colormap = create_waymo_label_colormap()
+  elif colormap_name == 'graph':
+    colormap = create_graph_label_colormap()
   else:
     raise ValueError('Could not find a colormap for dataset %s.' %
                      colormap_name)
