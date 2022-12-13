@@ -16,3 +16,4 @@ __pycache__/
 # Generated files
 *.o
 *.so
+*.tar.gz
