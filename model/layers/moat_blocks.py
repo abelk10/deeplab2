@@ -200,8 +200,9 @@ class MBConvBlock(tf.keras.layers.Layer):
     super().__init__(name=self._config.name)
     self._activation_fn = self._config.activation
     self._norm_class = self._config.norm_class
-
-  def build(self, input_shape: list[int]) -> None:
+  #ADD: modified the line below to get rid of python version issue (https://github.com/google-research/deeplab2/issues/138)
+  from typing import List
+  def build(self, input_shape: List[int]) -> None:
     input_size = input_shape[-1]
     inner_size = self._config.hidden_size * self._config.expansion_rate
 
