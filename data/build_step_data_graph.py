@@ -177,12 +177,12 @@ def _decode_panoptic_map(panoptic_map_path: str) -> Optional[str]:
     return None
   with tf.io.gfile.GFile(panoptic_map_path, 'rb') as f:
     panoptic_map = np.array(Image.open(f)).astype(np.int32)
-    #TODO: update with panoptic one later
-  semantic_map = panoptic_map#[:, :, 0]
-#   instance_map = (
-#       panoptic_map[:, :, 1] * _ENCODED_INSTANCE_LABEL_DIVISOR +
-#       panoptic_map[:, :, 2])
-  panoptic_map = semantic_map * _INSTANCE_LABEL_DIVISOR #+ instance_map
+  #TODO: update with panoptic one later
+  semantic_map = panoptic_map[:, :, 0]
+  instance_map = (
+      panoptic_map[:, :, 1] * _ENCODED_INSTANCE_LABEL_DIVISOR +
+      panoptic_map[:, :, 2])
+  panoptic_map = semantic_map * _INSTANCE_LABEL_DIVISOR + instance_map
   return panoptic_map.tobytes()
 
 

@@ -10,12 +10,12 @@ _GRAPH_META = [{
     "id": 1
 },{
     "color": [120, 120, 120],
-    "isthing": 0,
+    "isthing": 1,
     "name": "node",
     "id": 1
 }, {
     "color": [180, 120, 120],
-    "isthing": 0,
+    "isthing": 1,
     "name": "edge",
     "id": 2
 }]

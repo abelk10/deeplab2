@@ -339,7 +339,7 @@ GRAPH_PANOPTIC_INFORMATION = _build_dataset_info(
     panoptic_label_divisor=1000,
     class_has_instances_list=(
         # empty because we don't have instance_ids for now
-        # graph_constants.get_graph_class_has_instances_list() #nodes and edges are the things, background pixels are
+        graph_constants.get_graph_class_has_instances_list() #nodes and edges are the things, background pixels are
     ), 
     is_video_dataset=False,
     colormap=_GRAPH_COLORMAP,
