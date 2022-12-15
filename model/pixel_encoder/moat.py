@@ -34,6 +34,9 @@ from deeplab2.model.layers.moat_blocks import MOATBlock
 from deeplab2.utils.hparam_configs import Config
 from deeplab2.utils.hparam_configs import create_config_from_dict
 
+#ADD: modified the line below to get rid of python version issue (https://github.com/google-research/deeplab2/issues/138)
+from typing import List,Dict
+
 
 # This handles the invalid name scope of tf.keras.sequential
 # used in stem layers.
@@ -208,7 +211,7 @@ class MOAT(tf.keras.Model):
           survival_prob=survival_prob)
     return local_block_config
 
-  def build(self, input_shape: list[int]) -> None:
+  def build(self, input_shape: List[int]) -> None:
     norm_class = tf.keras.layers.experimental.SyncBatchNormalization
     self._config.norm_class = norm_class
     self._config.activation = tf.nn.gelu
@@ -346,11 +349,11 @@ no_relative_pe = Config(
 
 def get_model(
     name: str,
-    input_shape: list[int],
-    window_size: Optional[list[list[int]]] = None,
+    input_shape: List[int],
+    window_size: Optional[List[List[int]]] = None,
     survival_rate: Optional[float] = None,
     pool_size: Optional[int] = 3,
-    override_config: Optional[dict[str, Any]] = None,
+    override_config: Optional[Dict[str, Any]] = None,
     pretrained_weights_path: Optional[str] = None,
     remove_position_embedding: Optional[bool] = None,
     return_config: Optional[bool] = False,

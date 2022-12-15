@@ -39,6 +39,9 @@ import tensorflow as tf
 from deeplab2.model.layers.moat_attention import Attention
 from deeplab2.utils.hparam_configs import create_config_from_dict
 
+#ADD: modified the line below to get rid of python version issue (https://github.com/google-research/deeplab2/issues/138)
+from typing import List
+
 
 def drop_connect(inputs: tf.Tensor, training: bool,
                  survival_prob: float) -> tf.Tensor:
@@ -200,8 +203,6 @@ class MBConvBlock(tf.keras.layers.Layer):
     super().__init__(name=self._config.name)
     self._activation_fn = self._config.activation
     self._norm_class = self._config.norm_class
-  #ADD: modified the line below to get rid of python version issue (https://github.com/google-research/deeplab2/issues/138)
-  from typing import List
   def build(self, input_shape: List[int]) -> None:
     input_size = input_shape[-1]
     inner_size = self._config.hidden_size * self._config.expansion_rate
@@ -379,7 +380,7 @@ class MOATBlock(tf.keras.layers.Layer):
     self._activation_fn = self._config.activation
     self._norm_class = self._config.norm_class
 
-  def build(self, input_shape: list[int]) -> None:
+  def build(self, input_shape: List[int]) -> None:
     height, width, input_size = input_shape[-3:]
     inner_size = self._config.hidden_size * self._config.expansion_rate
 
