@@ -54,31 +54,31 @@ model_options {
       feature_key: "res2"
       channels_project: 32
     }
-#    instance {
-#      low_level_override {
-#        feature_key: "res3"
-#        channels_project: 32
-#      }
-#      low_level_override {
-#        feature_key: "res2"
-#        channels_project: 16
-#      }
-#      instance_decoder_override {
-#        feature_key: "res5"
-#        decoder_channels: 128
-#        atrous_rates: 6
-#        atrous_rates: 12
-#        atrous_rates: 18
-#      }
-#      center_head {
-#        output_channels: 1
-#        head_channels: 32
-#      }
-#      regression_head {
-#        output_channels: 2
-#        head_channels: 32
-#      }
-#    }
+    instance {
+      low_level_override {
+        feature_key: "res3"
+        channels_project: 32
+      }
+      low_level_override {
+        feature_key: "res2"
+        channels_project: 16
+      }
+      instance_decoder_override {
+        feature_key: "res5"
+        decoder_channels: 128
+        atrous_rates: 6
+        atrous_rates: 12
+        atrous_rates: 18
+      }
+      center_head {
+        output_channels: 1
+        head_channels: 32
+      }
+      regression_head {
+        output_channels: 2
+        head_channels: 32
+      }
+    }
     semantic_head {
       output_channels: 134
       head_channels: 256
