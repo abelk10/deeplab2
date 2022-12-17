@@ -80,7 +80,7 @@ model_options {
       }
     }
     semantic_head {
-      output_channels: 134
+      output_channels: 3
       head_channels: 256
     }
   }
