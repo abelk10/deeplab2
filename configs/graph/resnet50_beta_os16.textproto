@@ -36,15 +36,15 @@ model_options {
   restore_semantic_last_layer_from_initial_checkpoint: false
   backbone {
     name: "resnet50_beta"
-    output_stride: 16
+    output_stride: 32
   }
   decoder {
     feature_key: "res5"
     decoder_channels: 256
     aspp_channels: 256
+    atrous_rates: 3
     atrous_rates: 6
-    atrous_rates: 12
-    atrous_rates: 18
+    atrous_rates: 9
   }
   panoptic_deeplab {
     low_level {
@@ -118,10 +118,10 @@ train_dataset_options {
   # Adjust the batch_size accordingly to better fit your GPU/TPU memory.
   # Also see Q1 in g3doc/faq.md.
   batch_size: 64
-  crop_size: 641
-  crop_size: 641
-  min_resize_value: 641
-  max_resize_value: 641
+  crop_size: 129
+  crop_size: 129
+  min_resize_value: 129
+  max_resize_value: 129
   augmentations {
     min_scale_factor: 0.5
     max_scale_factor: 1.5
