@@ -87,7 +87,7 @@ model_options {
   }
 }
 trainer_options {
-  save_checkpoints_steps: 1000
+  save_checkpoints_steps: 100
   save_summaries_steps: 100
   steps_per_loop: 100
   loss_options {
