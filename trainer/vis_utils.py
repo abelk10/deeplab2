@@ -538,6 +538,8 @@ def save_parsing_result(parsing_result,
     colormap = create_ade20k_label_colormap()
   elif colormap_name == 'waymo':
     colormap = create_waymo_label_colormap()
+  elif colormap_name == 'graph':
+    colormap = create_graph_label_colormap()
   else:
     raise ValueError('Could not find a colormap for dataset %s.' %
                      colormap_name)
