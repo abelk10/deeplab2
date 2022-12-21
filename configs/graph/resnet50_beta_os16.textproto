@@ -32,7 +32,7 @@ experiment_name: "graph_semantic"
 model_options {
   # Update the path to the initial checkpoint (e.g., ImageNet
   # pretrained checkpoint).
-  initial_checkpoint: "./resnet50beta_os16_panoptic_deeplab_coco_train/ckpt-200000"
+  initial_checkpoint: "../data/resnet50_beta_imagenet1k_strong_training_strategy/ckpt-350"
   restore_semantic_last_layer_from_initial_checkpoint: false
   backbone {
     name: "resnet50_beta"
@@ -87,9 +87,9 @@ model_options {
   }
 }
 trainer_options {
-  save_checkpoints_steps: 100
-  save_summaries_steps: 100
-  steps_per_loop: 100
+  save_checkpoints_steps: 1000
+  save_summaries_steps: 1000
+  steps_per_loop: 1000
   loss_options {
     semantic_loss {
       name: "softmax_cross_entropy"
@@ -107,14 +107,14 @@ trainer_options {
   }
   solver_options {
     base_learning_rate: 0.0005
-    training_number_of_steps: 200000
+    training_number_of_steps: 10000
     warmup_steps: 2000
   }
 }
 train_dataset_options {
   dataset: "graph_panoptic"
   # Update the path to training set.
-  file_pattern: "./graph_d/train*.tfrecord"
+  file_pattern: "../data/graph_d/train*.tfrecord"
   # Adjust the batch_size accordingly to better fit your GPU/TPU memory.
   # Also see Q1 in g3doc/faq.md.
   batch_size: 64
@@ -134,17 +134,18 @@ train_dataset_options {
 eval_dataset_options {
   dataset: "graph_panoptic"
   # Update the path to validation set.
-  file_pattern: "./graph_d/val*.tfrecord"
+  file_pattern: "../data/graph_d/val*.tfrecord"
   batch_size: 1
-  crop_size: 641
-  crop_size: 641
-  min_resize_value: 641
-  max_resize_value: 641
+  crop_size: 321
+  crop_size: 321
+  min_resize_value: 321
+  max_resize_value: 321
   # Add options to make the evaluation loss comparable to the training loss.
   increase_small_instance_weights: true
   small_instance_weight: 3.0
 }
 evaluator_options {
+  eval_interval: 1000
   continuous_eval_timeout: -1
   stuff_area_limit: 4096
   center_score_threshold: 0.1
