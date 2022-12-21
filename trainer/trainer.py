@@ -24,6 +24,7 @@ from deeplab2 import config_pb2
 from deeplab2.model import utils
 from deeplab2.trainer import runner_utils
 from deeplab2.trainer import trainer_utils
+import pickle
 
 
 def _create_optimizer(
@@ -245,6 +246,18 @@ class Trainer(orbit.StandardTrainer):
           self._global_step)
     else:
       train_logs['learning_rate'] = self._optimizer.learning_rate
+    temp = {}
+    for k,v in train_logs.items():
+      temp[k] = v.numpy()
+    try:
+      f = open('train_info.pkl','rb')
+      tr = pickle.load(f)
+      f.close()
+      tr.append(temp)
+    except FileNotFoundError:
+      tr = [temp]
+    f = open('train_info.pkl','wb')
+    pickle.dump(tr,f)
     return train_logs
 
   @property

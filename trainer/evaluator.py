@@ -36,6 +36,7 @@ from deeplab2.evaluation import video_panoptic_quality as vpq
 from deeplab2.model import utils
 from deeplab2.trainer import runner_utils
 from deeplab2.trainer import vis
+import pickle
 
 _PANOPTIC_METRIC_OFFSET = 256 * 256 * 256
 _PREDICTIONS_KEY = 'unique_key_for_storing_predictions'
@@ -321,6 +322,18 @@ class Evaluator(orbit.StandardEvaluator):
       eval_logs['evaluation/depth/SqErrorRel'] = depth_results[1]
       eval_logs['evaluation/depth/AbsErrorRel'] = depth_results[2]
       eval_logs['evaluation/depth/DepthInlier'] = depth_results[3]
+    temp = {}
+    for k,v in eval_logs.items():
+      temp[k] = v.numpy()
+    try:
+      f = open('eval_info.pkl','rb')
+      ev = pickle.load(f)
+      f.close()
+      ev.append(temp)
+    except FileNotFoundError:
+      ev = [temp]
+    f = open('eval_info.pkl','wb')
+    pickle.dump(ev,f)
     return eval_logs
 
   def eval_reduce(self, state=None, step_outputs=None):
