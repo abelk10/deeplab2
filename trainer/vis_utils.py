@@ -328,7 +328,9 @@ def flow_to_color(flow_uv, clip_flow=None):
 
 def squeeze_batch_dim_and_convert_to_numpy(input_dict):
   for key in input_dict:
-    input_dict[key] = tf.squeeze(input_dict[key], axis=0).numpy()
+    shape = input_dict[key].shape
+    if len(shape)>=1 and shape[0]==1:
+      input_dict[key] = tf.squeeze(input_dict[key], axis=0).numpy()
   return input_dict
 
 
