@@ -178,7 +178,7 @@ def get_parsing_result(parsing_result,
 
     
 def get_predictions(predictions: Dict[str, Any], inputs: Dict[str, Any], dataset_info: dataset.DatasetDescriptor):
-  """Saves predictions and labels to the specified path."""
+  """Returns numpy image version of the predictions and labels"""
   predictions = {key: predictions[key][0] for key in predictions}
   predictions = vis_utils.squeeze_batch_dim_and_convert_to_numpy(predictions)
   inputs = {key: inputs[key][0] for key in inputs}
