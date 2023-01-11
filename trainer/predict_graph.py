@@ -6,12 +6,25 @@ from PIL import Image
 import tensorflow as tf
 import PIL
 
+from google.protobuf import text_format
+from deeplab2 import config_pb2
+import os
+import deeplab2.models.orbit as orbit
+import collections
+from deeplab2.data import graph_constants
+from deeplab2.data import dataset
+from deeplab2.trainer import train_lib
+from deeplab2.trainer import runner_utils
+from deeplab2 import common
+from deeplab2.model import utils
+import functools
+
 # OSS: removed unused atomic file imports.
 from deeplab2 import common
-from deeplab2.data import ade20k_constants
-from deeplab2.data import coco_constants
 from deeplab2.data import dataset
 from deeplab2.trainer import vis_utils
+from deeplab2.model import utils
+from deeplab2.trainer import vis
 
 # The format of the labels.
 _IMAGE_FORMAT = '%06d_image'
@@ -29,6 +42,221 @@ _SEMANTIC_PREDICTION_FORMAT = '%06d_semantic_prediction'
 
 # The format of others.
 _ANALYSIS_FORMAT = '%06d_semantic_error'
+
+_INSTANCE_LAYER_NAMES = (common.CKPT_MOTION_REGRESSION_HEAD_LAST_LAYER,
+                         common.CKPT_INSTANCE_REGRESSION_HEAD_LAST_LAYER,
+                         common.CKPT_INSTANCE_CENTER_HEAD_LAST_LAYER)
+
+DatasetDescriptor = collections.namedtuple(
+    'DatasetDescriptor', [
+        'dataset_name',  # Dataset name.
+        'splits_to_sizes',  # Splits of the dataset into training, val and test.
+        'num_classes',   # Number of semantic classes.
+        'ignore_label',  # Ignore label value used for semantic segmentation.
+
+        # Fields below are used for panoptic segmentation and will be None for
+        # Semantic segmentation datasets.
+        # Label divisor only used in panoptic segmentation annotation to infer
+        # semantic label and instance id.
+        'panoptic_label_divisor',
+        # A tuple of classes that contains instance annotations. For example,
+        # 'person' class has instance annotations while 'sky' does not.
+        'class_has_instances_list',
+        # A flag indicating whether the dataset is a video dataset that contains
+        # sequence IDs and frame IDs.
+        'is_video_dataset',
+        # A string specifying the colormap that should be used for
+        # visualization. E.g. 'cityscapes'.
+        'colormap',
+        # A flag indicating whether the dataset contains depth annotation.
+        'is_depth_dataset',
+        # The ignore label for depth annotations.
+        'ignore_depth',
+        # A list of camera names, only for multicamera setup.
+        'camera_names',
+    ]
+)
+
+def _build_dataset_info(**kwargs):
+  """Builds dataset information with default values."""
+  default = {
+      'camera_names': None,
+  }
+  default.update(kwargs)
+  return DatasetDescriptor(**default)
+
+GRAPH_PANOPTIC_INFORMATION = _build_dataset_info(
+    dataset_name='graph_panoptic',
+    splits_to_sizes={
+        'train': 5000,
+        'val': 500,
+    },
+    num_classes=3,
+    ignore_label=255,
+    panoptic_label_divisor=1000,
+    class_has_instances_list=(
+        # empty because we don't have instance_ids for now
+        graph_constants.get_graph_class_has_instances_list() #nodes and edges are the things, background pixels are
+    ), 
+    is_video_dataset=False,
+    colormap='graph',
+    is_depth_dataset=False,
+    ignore_depth=None,
+)
+
+
+class GraphModel:
+  def __init__(self, config_path, model_dir):
+    self.config_path = config_path
+    self.model_dir = model_dir
+
+    with tf.io.gfile.GFile(self.config_path, 'r') as proto_file:
+      self.config = text_format.ParseLines(proto_file, config_pb2.ExperimentOptions())
+
+    self.deeplab_model = train_lib.create_deeplab_model(
+        self.config, dataset.MAP_NAME_TO_DATASET_INFO[self.config.train_dataset_options.dataset])
+    
+    global_step = orbit.utils.create_global_step()
+    self.checkpoint_dict = dict(global_step=global_step)
+    self.checkpoint_dict.update(self.deeplab_model.checkpoint_items)
+    self.checkpoint = tf.train.Checkpoint(**self.checkpoint_dict)
+    init_dict = self.deeplab_model.checkpoint_items
+    if (not self.config.model_options
+        .restore_semantic_last_layer_from_initial_checkpoint):
+        del init_dict[common.CKPT_SEMANTIC_LAST_LAYER]
+    if (not self.config.model_options
+        .restore_instance_last_layer_from_initial_checkpoint):
+        for layer_name in _INSTANCE_LAYER_NAMES:
+            if layer_name in init_dict:
+                del init_dict[layer_name]
+    init_fn = functools.partial(runner_utils.maybe_load_checkpoint,
+                                self.config.model_options.initial_checkpoint,
+                                init_dict)
+    self.checkpoint_manager = tf.train.CheckpointManager(
+        self.checkpoint,
+        directory=self.model_dir,
+        max_to_keep=self.config.trainer_options.num_checkpoints_to_keep,
+        step_counter=global_step,
+        checkpoint_interval=self.config.trainer_options.save_checkpoints_steps,
+        init_fn=init_fn)
+    self.checkpoint_path = self.checkpoint_manager.restore_or_initialize()
+    
+  def predict(self, inputs):
+      tf.assert_equal(
+          tf.shape(inputs[common.IMAGE])[0], 1, 'Currently only a '
+          'batchsize of 1 is supported in evaluation due to resizing.')
+      outputs = self.deeplab_model(inputs[common.IMAGE], training=False)
+      raw_size = [
+          inputs[common.GT_SIZE_RAW][0, 0], inputs[common.GT_SIZE_RAW][0, 1]
+      ]
+      resized_size = [
+          tf.shape(inputs[common.RESIZED_IMAGE])[1],
+          tf.shape(inputs[common.RESIZED_IMAGE])[2],
+      ]
+      outputs = utils.undo_preprocessing(outputs, resized_size,
+                                          raw_size)
+      inputs = utils.undo_preprocessing(inputs, resized_size,
+                                        raw_size)
+      return inputs, outputs
+
+  def get_predictions(self, inputs: Dict[str, Any], dataset_info: dataset.DatasetDescriptor):
+    # TODO: call predict here and change code back to the old copy version
+    inputs, predictions = self.predict(inputs)
+    """Returns numpy image version of the predictions and labels"""
+    predictions = {key: predictions[key][0] for key in predictions}
+    predictions = vis_utils.squeeze_batch_dim_and_convert_to_numpy(predictions)
+    inputs = {key: inputs[key][0] for key in inputs}
+    del inputs[common.IMAGE_NAME]
+    inputs = vis_utils.squeeze_batch_dim_and_convert_to_numpy(inputs)
+
+    thing_list = dataset_info.class_has_instances_list
+    label_divisor = dataset_info.panoptic_label_divisor
+    colormap_name = dataset_info.colormap
+
+    preds_vis = {}
+
+    # 1. Save image.
+    image = inputs[common.IMAGE]
+    preds_vis[common.IMAGE] = get_annotation(
+        image,
+        add_colormap=False)
+
+    # 2. Save semantic predictions and semantic labels.
+    preds_vis[common.PRED_SEMANTIC_KEY] = get_annotation(
+        predictions[common.PRED_SEMANTIC_KEY],
+        add_colormap=True,
+        colormap_name=colormap_name)
+    # vis_utils.save_annotation(
+    #     inputs[common.GT_SEMANTIC_RAW],
+    #     add_colormap=True,
+    #     colormap_name=colormap_name)
+
+    if common.PRED_CENTER_HEATMAP_KEY in predictions:
+      # 3. Save center heatmap.
+      heatmap_pred = predictions[common.PRED_CENTER_HEATMAP_KEY]
+      heat_map_gt = inputs[common.GT_INSTANCE_CENTER_KEY]
+      preds_vis[common.PRED_CENTER_HEATMAP_KEY] = get_annotation(
+          vis_utils.overlay_heatmap_on_image(
+              heatmap_pred,
+              image.numpy()),
+          add_colormap=False)
+      preds_vis[common.GT_INSTANCE_CENTER_KEY] = get_annotation(
+          vis_utils.overlay_heatmap_on_image(
+              heat_map_gt,
+              image.numpy()),
+          add_colormap=False)
+
+    if common.PRED_OFFSET_MAP_KEY in predictions:
+      # 4. Save center offsets.
+      center_offset_prediction = predictions[common.PRED_OFFSET_MAP_KEY]
+      center_offset_prediction_rgb = vis_utils.flow_to_color(
+          center_offset_prediction)
+      semantic_prediction = predictions[common.PRED_SEMANTIC_KEY]
+      pred_fg_mask = vis._get_fg_mask(semantic_prediction, thing_list)
+      center_offset_prediction_rgb = (
+          center_offset_prediction_rgb * pred_fg_mask)
+      preds_vis[common.PRED_OFFSET_MAP_KEY] = get_annotation(
+          center_offset_prediction_rgb,
+          add_colormap=False)
+
+      center_offset_label = inputs[common.GT_INSTANCE_REGRESSION_KEY]
+      center_offset_label_rgb = vis_utils.flow_to_color(center_offset_label)
+      gt_fg_mask = vis._get_fg_mask(inputs[common.GT_SEMANTIC_RAW], thing_list)
+      center_offset_label_rgb = center_offset_label_rgb * gt_fg_mask
+
+      preds_vis[common.GT_INSTANCE_REGRESSION_KEY] = get_annotation(
+          center_offset_label_rgb,
+          add_colormap=False)
+
+    if common.PRED_INSTANCE_KEY in predictions:
+      # 5. Save instance map.
+      preds_vis[common.PRED_INSTANCE_KEY] = get_annotation(
+          vis_utils.create_rgb_from_instance_map(
+              predictions[common.PRED_INSTANCE_KEY]),
+          add_colormap=False)
+
+    if common.PRED_PANOPTIC_KEY in predictions:
+      # 6. Save panoptic segmentation.
+      preds_vis[common.PRED_PANOPTIC_KEY] = get_parsing_result(
+          predictions[common.PRED_PANOPTIC_KEY],
+          label_divisor=label_divisor,
+          thing_list=thing_list,
+          colormap_name=colormap_name)
+      preds_vis[common.GT_PANOPTIC_RAW] = get_parsing_result(
+          parsing_result=inputs[common.GT_PANOPTIC_RAW],
+          label_divisor=label_divisor,
+          thing_list=thing_list,
+          colormap_name=colormap_name)
+
+    # 7. Save error of semantic prediction.
+    label = inputs[common.GT_SEMANTIC_RAW].numpy().astype(np.uint8)
+    error_prediction = (
+        (predictions[common.PRED_SEMANTIC_KEY].numpy() != label) &
+        (label != dataset_info.ignore_label)).astype(np.uint8) * 255
+    preds_vis['semantic_error'] = get_annotation(
+        error_prediction,
+        add_colormap=False)
+    return inputs, preds_vis
 
 def get_annotation(label,
                     add_colormap=True,
@@ -65,7 +293,8 @@ def get_annotation(label,
 
     if scale_factor:
       colored_label = scale_factor * colored_label
-
+  if tf.is_tensor(colored_label):
+    colored_label = colored_label.numpy()
   return colored_label.astype(dtype=output_dtype)
 
 
@@ -172,104 +401,7 @@ def get_parsing_result(parsing_result,
       # For `stuff` class, we use the defined semantic color.
       colored_output[semantic_mask] = colormap[semantic_value]
       used_colors.add(tuple(colormap[semantic_value]))
+    if tf.is_tensor(colored_output):
+      colored_output = colored_output.numpy()
 
   return colored_output.astype(dtype=np.uint8)
-
-
-    
-def get_predictions(predictions: Dict[str, Any], inputs: Dict[str, Any], dataset_info: dataset.DatasetDescriptor):
-  """Returns numpy image version of the predictions and labels"""
-  predictions = {key: predictions[key][0] for key in predictions}
-  predictions = vis_utils.squeeze_batch_dim_and_convert_to_numpy(predictions)
-  inputs = {key: inputs[key][0] for key in inputs}
-  del inputs[common.IMAGE_NAME]
-  inputs = vis_utils.squeeze_batch_dim_and_convert_to_numpy(inputs)
-
-  thing_list = dataset_info.class_has_instances_list
-  label_divisor = dataset_info.panoptic_label_divisor
-  colormap_name = dataset_info.colormap
-
-  preds_vis = {}
-
-  # 1. Save image.
-  image = inputs[common.IMAGE]
-  preds_vis[common.IMAGE] = get_annotation(
-      image,
-      add_colormap=False)
-
-  # 2. Save semantic predictions and semantic labels.
-  preds_vis[common.PRED_SEMANTIC_KEY] = get_annotation(
-      predictions[common.PRED_SEMANTIC_KEY],
-      add_colormap=True,
-      colormap_name=colormap_name)
-  # vis_utils.save_annotation(
-  #     inputs[common.GT_SEMANTIC_RAW],
-  #     add_colormap=True,
-  #     colormap_name=colormap_name)
-
-  if common.PRED_CENTER_HEATMAP_KEY in predictions:
-    # 3. Save center heatmap.
-    heatmap_pred = predictions[common.PRED_CENTER_HEATMAP_KEY]
-    heat_map_gt = inputs[common.GT_INSTANCE_CENTER_KEY]
-    preds_vis[common.PRED_CENTER_HEATMAP_KEY] = get_annotation(
-        vis_utils.overlay_heatmap_on_image(
-            heatmap_pred,
-            image),
-        add_colormap=False)
-    preds_vis[common.GT_INSTANCE_CENTER_KEY] = get_annotation(
-        vis_utils.overlay_heatmap_on_image(
-            heat_map_gt,
-            image),
-        add_colormap=False)
-
-  if common.PRED_OFFSET_MAP_KEY in predictions:
-    # 4. Save center offsets.
-    center_offset_prediction = predictions[common.PRED_OFFSET_MAP_KEY]
-    center_offset_prediction_rgb = vis_utils.flow_to_color(
-        center_offset_prediction)
-    semantic_prediction = predictions[common.PRED_SEMANTIC_KEY]
-    pred_fg_mask = vis_utils._get_fg_mask(semantic_prediction, thing_list)
-    center_offset_prediction_rgb = (
-        center_offset_prediction_rgb * pred_fg_mask)
-    preds_vis[common.PRED_OFFSET_MAP_KEY] = get_annotation(
-        center_offset_prediction_rgb,
-        add_colormap=False)
-
-    center_offset_label = inputs[common.GT_INSTANCE_REGRESSION_KEY]
-    center_offset_label_rgb = vis_utils.flow_to_color(center_offset_label)
-    gt_fg_mask = vis_utils._get_fg_mask(inputs[common.GT_SEMANTIC_RAW], thing_list)
-    center_offset_label_rgb = center_offset_label_rgb * gt_fg_mask
-
-    preds_vis[common.GT_INSTANCE_REGRESSION_KEY] = get_annotation(
-        center_offset_label_rgb,
-        add_colormap=False)
-
-  if common.PRED_INSTANCE_KEY in predictions:
-    # 5. Save instance map.
-    preds_vis[common.PRED_INSTANCE_KEY] = get_annotation(
-        vis_utils.create_rgb_from_instance_map(
-            predictions[common.PRED_INSTANCE_KEY]),
-        add_colormap=False)
-
-  if common.PRED_PANOPTIC_KEY in predictions:
-    # 6. Save panoptic segmentation.
-    preds_vis[common.PRED_PANOPTIC_KEY] = get_parsing_result(
-        predictions[common.PRED_PANOPTIC_KEY],
-        label_divisor=label_divisor,
-        thing_list=thing_list,
-        colormap_name=colormap_name)
-    preds_vis[common.GT_PANOPTIC_RAW] = get_parsing_result(
-        parsing_result=inputs[common.GT_PANOPTIC_RAW],
-        label_divisor=label_divisor,
-        thing_list=thing_list,
-        colormap_name=colormap_name)
-
-  # 7. Save error of semantic prediction.
-  label = inputs[common.GT_SEMANTIC_RAW].astype(np.uint8)
-  error_prediction = (
-      (predictions[common.PRED_SEMANTIC_KEY] != label) &
-      (label != dataset_info.ignore_label)).astype(np.uint8) * 255
-  preds_vis['semantic_error'] = get_annotation(
-      error_prediction,
-      add_colormap=False)
-  return preds_vis
