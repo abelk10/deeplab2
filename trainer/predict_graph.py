@@ -88,8 +88,8 @@ def _build_dataset_info(**kwargs):
 GRAPH_PANOPTIC_INFORMATION = _build_dataset_info(
     dataset_name='graph_panoptic',
     splits_to_sizes={
-        'train': 5000,
-        'val': 500,
+        'train': 15000,
+        'val': 1000,
     },
     num_classes=3,
     ignore_label=255,
@@ -103,6 +103,20 @@ GRAPH_PANOPTIC_INFORMATION = _build_dataset_info(
     is_depth_dataset=False,
     ignore_depth=None,
 )
+
+def load_deeplab_eval_dataset_split(config_path='/home/abel/code/deeplab2/configs/graph/resnet50_beta_os16.textproto'):
+  with tf.io.gfile.GFile(config_path, 'r') as proto_file:
+      config = text_format.ParseLines(proto_file, config_pb2.ExperimentOptions())
+  _supported_tasks = utils.get_supported_tasks(config)
+  eval_dataset = runner_utils.create_dataset(
+        config.eval_dataset_options,
+        is_training=False,
+        only_semantic_annotations=(common.TASK_PANOPTIC_SEGMENTATION
+                                   not in _supported_tasks))
+  _strategy = tf.distribute.get_strategy()
+  eval_dataset = orbit.utils.make_distributed_dataset(_strategy,
+                                                        eval_dataset)
+  return eval_dataset                                                    
 
 
 class GraphModel:
@@ -146,13 +160,26 @@ class GraphModel:
           tf.shape(inputs[common.IMAGE])[0], 1, 'Currently only a '
           'batchsize of 1 is supported in evaluation due to resizing.')
       outputs = self.deeplab_model(inputs[common.IMAGE], training=False)
-      raw_size = [
-          inputs[common.GT_SIZE_RAW][0, 0], inputs[common.GT_SIZE_RAW][0, 1]
-      ]
-      resized_size = [
-          tf.shape(inputs[common.RESIZED_IMAGE])[1],
-          tf.shape(inputs[common.RESIZED_IMAGE])[2],
-      ]
+      if common.GT_SIZE_RAW in inputs.keys():
+        raw_size = [
+            inputs[common.GT_SIZE_RAW][0, 0], inputs[common.GT_SIZE_RAW][0, 1]
+        ]
+      else:
+        raw_size = [
+          tf.shape(inputs[common.IMAGE])[1],
+          tf.shape(inputs[common.IMAGE])[2],
+        ]
+      if common.GT_SIZE_RAW in inputs.keys():
+        resized_size = [
+            tf.shape(inputs[common.RESIZED_IMAGE])[1],
+            tf.shape(inputs[common.RESIZED_IMAGE])[2],
+        ]
+      else:
+        resized_size = [
+          tf.shape(inputs[common.IMAGE])[1]+1,
+          tf.shape(inputs[common.IMAGE])[2]+1,
+        ]
+
       outputs = utils.undo_preprocessing(outputs, resized_size,
                                           raw_size)
       inputs = utils.undo_preprocessing(inputs, resized_size,
