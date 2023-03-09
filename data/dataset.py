@@ -331,8 +331,8 @@ ADE20K_PANOPTIC_INFORMATION = _build_dataset_info(
 GRAPH_PANOPTIC_INFORMATION = _build_dataset_info(
     dataset_name=_GRAPH_PANOPTIC_INFORMATION,
     splits_to_sizes={
-        'train': 5000,
-        'val': 500,
+        'train': 15000,
+        'val': 1000,
     },
     num_classes=3,
     ignore_label=255,
