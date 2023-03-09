@@ -326,13 +326,13 @@ class Evaluator(orbit.StandardEvaluator):
     for k,v in eval_logs.items():
       temp[k] = v.numpy()
     try:
-      f = open('eval_info.pkl','rb')
+      f = open(os.path.join('/'.join(os.path.split(self._config.model_options.initial_checkpoint)[:-1]), self._config.experiment_name, 'eval_info.pkl'),'rb')
       ev = pickle.load(f)
       f.close()
       ev.append(temp)
     except FileNotFoundError:
       ev = [temp]
-    f = open('eval_info.pkl','wb')
+    f = open(os.path.join('/'.join(os.path.split(self._config.model_options.initial_checkpoint)[:-1]), self._config.experiment_name, 'eval_info.pkl'),'wb')
     pickle.dump(ev,f)
     return eval_logs
 
