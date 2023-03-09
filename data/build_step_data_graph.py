@@ -144,7 +144,7 @@ def _get_images_per_shard(step_root: str, dataset_split: str,
     A list of sorted file lists. Each inner list corresponds to one shard and is
     a list of files for this shard.
   """
-  search_files = os.path.join(step_root, _IMAGE_FOLDER_NAME, dataset_split, '*')
+  search_files = os.path.join(step_root, _IMAGE_FOLDER_NAME, dataset_split, '*.png') # NOTE: only png files
   filenames = sorted(tf.io.gfile.glob(search_files))
   num_per_even_shard = int(math.ceil(len(filenames) / _NUM_SHARDS))
 
