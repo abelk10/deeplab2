@@ -25,6 +25,7 @@ from deeplab2.model import utils
 from deeplab2.trainer import runner_utils
 from deeplab2.trainer import trainer_utils
 import pickle
+import os
 
 
 def _create_optimizer(
@@ -250,13 +251,13 @@ class Trainer(orbit.StandardTrainer):
     for k,v in train_logs.items():
       temp[k] = v.numpy()
     try:
-      f = open('train_info.pkl','rb')
+      f = open(os.path.join('/'.join(os.path.split(self._config.model_options.initial_checkpoint)[:-1]), self._config.experiment_name, 'train_info.pkl'),'rb')
       tr = pickle.load(f)
       f.close()
       tr.append(temp)
     except FileNotFoundError:
       tr = [temp]
-    f = open('train_info.pkl','wb')
+    f = open(os.path.join('/'.join(os.path.split(self._config.model_options.initial_checkpoint)[:-1]), self._config.experiment_name, 'train_info.pkl'),'wb')
     pickle.dump(tr,f)
     return train_logs
 
